@@ -1,0 +1,6 @@
+[project]
+name = "ecommerce-api"
+version = "0.1.0"
+dependencies = ["fastapi", "sqlalchemy", "pydantic"]
+[tool.poetry.dependencies]
+python = "^3.11"

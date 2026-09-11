@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+.pytest_cache
+node_modules
+dist
+.venv
+venv
+*.zip
+sample-test.zip
+.env
+.DS_Store
