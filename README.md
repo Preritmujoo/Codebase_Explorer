@@ -1,134 +1,225 @@
 # Codebase Explorer — MVP
 
-Upload a `.zip` of any source-code repo and get an instant architectural overview: file tree, languages, frameworks, dependencies, API endpoints, classes/functions, import graph, and a Monaco-powered code viewer.
+Upload a `.zip` of any source-code repository and get an instant architectural overview, including:
 
-![Stack](https://img.shields.io/badge/Backend-FastAPI-009688) ![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB) ![Python](https://img.shields.io/badge/Python-3.12-3776AB)
+- File tree
+- Languages
+- Frameworks
+- Dependencies
+- API endpoints
+- Classes and functions
+- Import graph
+- Monaco-powered code viewer
+
+![Stack](https://img.shields.io/badge/Backend-FastAPI-009688)
+![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB)
+
+---
 
 ## Architecture
 
-```
+```text
 ┌─────────────────┐      POST /api/analyze (zip)      ┌──────────────────┐
-│  React (Vite)   │  ───────────────────────────────>  │  FastAPI + AST   │
-│  Tailwind       │  <───────────────────────────────  │  analyzers/      │
-│  React Flow     │      JSON analysis                 │  services/       │
-│  Monaco Editor  │  ───────────────────────────────>  │  /api/repository │
-└─────────────────┘      GET /file?path=...            └──────────────────┘
+│  React (Vite)   │  ───────────────────────────────> │  FastAPI + AST   │
+│  Tailwind       │  <─────────────────────────────── │  analyzers/      │
+│  React Flow     │      JSON analysis                │  services/       │
+│  Monaco Editor  │  ───────────────────────────────> │  /api/repository │
+└─────────────────┘      GET /file?path=...           └──────────────────┘
          ▲                                                    ▲
          │ docker-compose.yml                                 │
-         └─────────────── Docker Compose ──────────────────────┘
+         └────────────── Docker Compose ──────────────────────┘
 ```
 
-**Backend** (`backend/app/`):
-- `api/routes.py` — `POST /api/analyze`, `GET /api/repository/{id}/analysis`, `GET /api/repository/{id}/file`
-- `services/analyzer_service.py` — zip extraction (traversal-safe), file discovery, tree building, graph construction, in-memory store
-- `analyzers/python_analyzer.py` — `ast` parsing for imports/classes/functions + decorator-based FastAPI/Flask route detection
-- `analyzers/js_analyzer.py` — regex-based import/Express route detection for JS/TS
-- `analyzers/deps_analyzer.py` — `requirements.txt`, `pyproject.toml`, `package.json` parsing
-- `analyzers/framework_detector.py` — evidence-based detection for FastAPI/Flask/Django/Express/React/Vue/Next/SQLAlchemy/Vite
+### Backend (`backend/app/`)
 
-**Frontend** (`frontend/src/`):
-- `pages/Explorer.tsx` — upload → 3-column layout (File Tree | Architecture Graph | Insights) + Monaco viewer
+- `api/routes.py` — `POST /api/analyze`, `GET /api/repository/{id}/analysis`, `GET /api/repository/{id}/file`
+- `services/analyzer_service.py` — ZIP extraction (traversal-safe), file discovery, tree building, graph construction, in-memory store
+- `analyzers/python_analyzer.py` — `ast` parsing for imports/classes/functions and decorator-based FastAPI/Flask route detection
+- `analyzers/js_analyzer.py` — Regex-based import and Express route detection for JS/TS
+- `analyzers/deps_analyzer.py` — `requirements.txt`, `pyproject.toml`, and `package.json` parsing
+- `analyzers/framework_detector.py` — Evidence-based detection for FastAPI, Flask, Django, Express, React, Vue, Next, SQLAlchemy, and Vite
+
+### Frontend (`frontend/src/`)
+
+- `pages/Explorer.tsx` — Upload → three-column layout (File Tree | Architecture Graph | Insights) with Monaco viewer
 - `components/FileTree.tsx`, `ArchitectureGraph.tsx`, `InsightsPanel.tsx`, `CodeViewer.tsx`, `UploadDropzone.tsx`
-- `services/api.ts` — axios client
+- `services/api.ts` — Axios client
+
+---
 
 ## Tech Stack
 
-| Layer | Tech |
-|-------|------|
+| Layer | Technology |
+|---------|------------|
 | Backend | Python 3.12, FastAPI, Pydantic, `ast`, `uvicorn`, `python-multipart` |
 | Frontend | React 18, TypeScript, Vite 5, Tailwind 3, React Flow 11, Monaco Editor |
-| Storage | Temp filesystem + in-memory dict (`STORE`) — no DB |
-| Deploy | Docker + Docker Compose |
+| Storage | Temporary filesystem + in-memory dictionary (`STORE`) |
+| Deployment | Docker + Docker Compose |
+
+---
 
 ## Quick Start
 
-### Docker (recommended)
+### Docker (Recommended)
+
 ```bash
 docker compose up --build
-# frontend → http://localhost:5173
-# backend  → http://localhost:8000  (GET /health, POST /api/analyze)
-```
-
-### Local dev (without Docker)
-```bash
-# Backend — from repo root (recommended, works with .venv at repo root):
-python -m pip install -r backend/requirements.txt
-python -m uvicorn backend.app.main:app --reload --port 8000
-# or, if you cd into backend/:
-cd backend
-uvicorn app.main:app --reload --port 8000
-# (do NOT run `uvicorn backend.app.main:app` while inside backend/ — that
-#  gives ModuleNotFoundError: No module named 'backend')
-
-# With a venv at repo root (.venv):
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-# then either of the above commands
-```
 
 # Frontend
+http://localhost:5173
+
+# Backend
+http://localhost:8000
+```
+
+### Local Development
+
+#### Backend
+
+```bash
+# From repository root
+python -m pip install -r backend/requirements.txt
+python -m uvicorn backend.app.main:app --reload --port 8000
+
+# Or from backend/
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
+
+> Do not run `uvicorn backend.app.main:app` while inside `backend/` or you will get `ModuleNotFoundError: No module named 'backend'`.
+
+If using a virtual environment at the repository root:
+
+```bash
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+```
+
+#### Frontend
+
+```bash
 cd frontend
 npm install
 npm run dev
-# → http://localhost:5173  (proxies /api to :8000 via vite.config.ts)
 ```
+
+Frontend runs at:
+
+```text
+http://localhost:5173
+```
+
+---
 
 ## Usage
 
-1. Zip a repository (any folder → right-click → Compress / `zip -r repo.zip .`).
-2. Open http://localhost:5173, drag-and-drop the `.zip` (or click Browse).
-3. Explore the file tree, click a graph node/file to view source in Monaco, inspect Languages/Frameworks/APIs.
+1. Zip a repository (`zip -r repo.zip .`).
+2. Open `http://localhost:5173`.
+3. Drag and drop the `.zip` file (or click **Browse**).
+4. Explore the file tree, architecture graph, and source code.
 
-**Sample repo** included at `/sample-repo` — a small FastAPI + React e-commerce app (ShopSphere) with:
-- `backend/app/api/*` (auth, users, products, orders), `services/*`, `models/*`, `core/*`
-- `frontend/src/*` (components, api, store) with `react`, `axios`, `zustand`
-- Real cross-imports (`app.services.auth_service` ↔ `app.models.user`, `inventory_service` ↔ `order_service`, React `ProductList` ↔ `api/client` ↔ `ProductCard`) so the architecture graph is dense.
+### Sample Repository
 
-Zip it quickly:
+A sample repository is included at `/sample-repo`, containing a small FastAPI + React e-commerce application ("ShopSphere") with:
+
+- `backend/app/api/*` (auth, users, products, orders)
+- `services/*`, `models/*`, `core/*`
+- `frontend/src/*` (components, API, store)
+- Dependencies including `react`, `axios`, and `zustand`
+- Cross-import relationships for architecture graph visualization
+
+Create a ZIP archive:
+
 ```bash
-# Linux/Mac
+# Linux / macOS
 zip -r sample-repo.zip sample-repo
+
 # Windows PowerShell
 Compress-Archive -Path sample-repo\* -DestinationPath sample-repo.zip -Force
 ```
 
+---
+
 ## API
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/analyze` | multipart `file` (.zip) → `AnalysisResult` |
-| `GET` | `/api/repository/{id}/analysis` | fetch cached analysis |
-| `GET` | `/api/repository/{id}/file?path=relative/path.py` | raw file content (text only) |
-| `GET` | `/health` | `{status: ok}` |
-| `GET` | `/api/llm/status` | `{configured, default_model}` — is `GROQ_API_KEY` set? (key never exposed) |
-| `POST` | `/api/chat` | `{messages, model?, max_tokens?, temperature?}` → Groq `openai/gpt-oss-20b` reply |
-| `POST` | `/api/repository/{id}/chat` | repo-aware chat: `{messages, file_path?, include_structure?}` — model gets file list, languages, frameworks, endpoints, classes/functions + optional selected file |
+| Method | Endpoint | Description |
+|----------|----------|-------------|
+| `POST` | `/api/analyze` | Upload a ZIP and receive an `AnalysisResult` |
+| `GET` | `/api/repository/{id}/analysis` | Retrieve cached analysis |
+| `GET` | `/api/repository/{id}/file?path=relative/path.py` | Retrieve raw text file content |
+| `GET` | `/health` | Health check endpoint |
+| `GET` | `/api/llm/status` | Returns model configuration status |
+| `POST` | `/api/chat` | Chat endpoint using Groq `openai/gpt-oss-20b` |
+| `POST` | `/api/repository/{id}/chat` | Repository-aware chat endpoint |
 
-`AnalysisResult` includes `file_tree`, `languages`, `frameworks`, `dependencies`, `endpoints`, `classes`, `functions`, `imports`, `graph: {nodes, edges}`, `stats`.
+### AnalysisResult
+
+`AnalysisResult` includes:
+
+- `file_tree`
+- `languages`
+- `frameworks`
+- `dependencies`
+- `endpoints`
+- `classes`
+- `functions`
+- `imports`
+- `graph { nodes, edges }`
+- `stats`
+
+---
 
 ## Security & Limitations
 
-- **Path traversal** prevented: zip entries with `..` or absolute paths are skipped; `GET /file` validates `..` and `relative_to(root)`.
-- **Ignored**: `.git`, `node_modules`, `.venv`, `venv`, `__pycache__`, `dist`, `build`, `.next`, binary extensions (png, jpg, woff, etc.), `__MACOSX`.
-- **In-memory only**: analyses live in `STORE` until process restart; no persistence.
-- **50 MB** zip limit; files >2 MB binary-skipped.
-- **Parsing**: Python via `ast` (accurate), JS/TS via lightweight regex (no Babel) — may miss dynamic imports.
-- **No auth, no DB, no LLM** — as scoped for MVP.
+- Path traversal protection prevents extraction of entries containing `..` or absolute paths.
+- `GET /file` validates paths using `relative_to(root)`.
+- Ignored directories:
+  - `.git`
+  - `node_modules`
+  - `.venv`
+  - `venv`
+  - `__pycache__`
+  - `dist`
+  - `build`
+  - `.next`
+  - `__MACOSX`
+- Binary assets such as images and fonts are skipped.
+- Analyses are stored in memory only and are lost after restart.
+- Maximum ZIP size: **50 MB**.
+- Files larger than **2 MB** are skipped when detected as binary.
+- Python parsing uses `ast`; JS/TS parsing uses lightweight regex matching.
+- No authentication, database, or persistent storage (MVP scope).
+
+---
 
 ## Testing
 
 ```bash
-# Backend (Windows example)
+# Backend
 python -m pytest backend/tests -v
 
-# Frontend build
-cd frontend && npm run build
+# Frontend
+cd frontend
+npm run build
 ```
 
-Tests cover: Python import detection, FastAPI route detection, JS import/Express route detection, file-discovery ignore rules, path-traversal blocking, and happy-path `POST /api/analyze` → `GET /file`.
+Tests cover:
+
+- Python import detection
+- FastAPI route detection
+- JS import and Express route detection
+- Ignore-rule validation
+- Path traversal protection
+- `POST /api/analyze` → `GET /file` flow
+
+---
 
 ## Project Structure
 
-```
+```text
 .
 ├── backend/app/
 │   ├── api/routes.py
@@ -142,8 +233,10 @@ Tests cover: Python import detection, FastAPI route detection, JS import/Express
 └── frontend/Dockerfile
 ```
 
+---
+
 ## Troubleshooting
 
-- `Invalid zip` → ensure you zipped the folder contents, not a nested archive.
-- `File not found` → paths are relative to the zip root (e.g., `backend/app/main.py`, not `/abs/path`).
-- CORS → backend allows `*` in MVP; restrict in production.
+- **Invalid zip** → Ensure the repository contents were zipped correctly.
+- **File not found** → Use paths relative to the ZIP root (for example, `backend/app/main.py`).
+- **CORS issues** → Backend allows `*` in MVP mode; restrict origins in production.
