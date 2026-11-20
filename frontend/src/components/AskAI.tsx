@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { askRepoChat, getLlmStatus, ChatMessage } from '../services/api'
 
-export function AskAI({ repoId, selectedPath, onClose, onMinimize }: { repoId: string, selectedPath: string | null, onClose: () => void, onMinimize: () => void }) {
+export function AskAI({ repoId, selectedPath, onClose, onMinimize, isMaximized, onToggleMaximize }: { repoId: string, selectedPath: string | null, onClose: () => void, onMinimize: () => void, isMaximized?: boolean, onToggleMaximize?: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -44,6 +44,10 @@ export function AskAI({ repoId, selectedPath, onClose, onMinimize }: { repoId: s
     }
   }
 
+  // Single shared style for all window controls so minimize/maximize/close have
+  // identical button dimensions, clickable area, padding, radius and hover.
+  const headerBtn = 'w-7 h-7 shrink-0 flex items-center justify-center rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors leading-none'
+
   return (
     <div className="h-full flex flex-col bg-[#0e0e14] min-h-0">
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#23232f] shrink-0">
@@ -53,8 +57,19 @@ export function AskAI({ repoId, selectedPath, onClose, onMinimize }: { repoId: s
           {model && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-500 truncate max-w-[140px]" title={model}>{model.split('/').pop()}</span>}
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={onMinimize} title="Minimize chat" aria-label="Minimize chat" className="w-7 h-7 shrink-0 flex items-center justify-center rounded-md text-zinc-500 hover:text-white hover:bg-white/10 transition-colors">−</button>
-          <button onClick={onClose} title="Close chat" aria-label="Close chat" className="w-7 h-7 shrink-0 flex items-center justify-center rounded-md text-zinc-500 hover:text-white hover:bg-white/10 transition-colors">✕</button>
+          {/* Same window-control styling as CodeViewer so minimize/maximize/close match */}
+          <button onClick={onMinimize} title="Minimize chat" aria-label="Minimize chat" className={headerBtn}><MinimizeIcon /></button>
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              title={isMaximized ? 'Restore chat window' : 'Maximize chat window'}
+              aria-label={isMaximized ? 'Restore chat window' : 'Maximize chat window'}
+              className={headerBtn}
+            >
+              {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
+            </button>
+          )}
+          <button onClick={onClose} title="Close chat" aria-label="Close chat" className={headerBtn}><CloseIcon /></button>
         </div>
       </div>
 
@@ -157,4 +172,39 @@ const mdComponents = {
   thead: ({ ...props }: any) => <thead className="bg-white/[0.05]" {...props} />,
   th: ({ ...props }: any) => <th className="text-left px-2 py-1 border-b border-white/10 text-zinc-200 font-medium whitespace-nowrap" {...props} />,
   td: ({ ...props }: any) => <td className="px-2 py-1 border-b border-white/[0.06] text-zinc-300 align-top" {...props} />,
+}
+
+// Fixed-size (12px) stroked icons so every window control renders the same
+// glyph size inside the identical 28px button container (matches CodeViewer).
+function MinimizeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M2.5 6h7" />
+    </svg>
+  )
+}
+
+function MaximizeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="9" height="9" rx="1" />
+    </svg>
+  )
+}
+
+function RestoreIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="3.5" y="1.5" width="7" height="7" rx="1" />
+      <path d="M8.5 10.5h-6v-6" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+    </svg>
+  )
 }

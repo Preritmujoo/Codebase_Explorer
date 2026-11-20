@@ -17,6 +17,98 @@ export function Explorer() {
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isChatMinimized, setIsChatMinimized] = useState(false)
 
+  // --- AI chat window (resizable / maximizable drawer) state ---
+  // Anchored top-right like before; width/height are user-adjustable by dragging
+  // the left/bottom edges or the bottom-left corner. `chatHeight === null` means
+  // full height (the original bottom-0 behavior) until the user drags an edge.
+  const CHAT_MIN_W = 320
+  const CHAT_MIN_H = 360
+  const HEADER_H = 56 // header is h-14
+  const [chatWidth, setChatWidth] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640 ? window.innerWidth : 400)
+  const [chatHeight, setChatHeight] = useState<number | null>(null)
+  const [isChatMaximized, setIsChatMaximized] = useState(false)
+  const [isChatResizing, setIsChatResizing] = useState(false)
+  const prevChatSizeRef = useRef({ w: 400, h: null as number | null })
+  const chatDragRef = useRef<{ startX: number, startY: number, w: number, h: number, dir: 'w' | 'h' | 'wh' } | null>(null)
+
+  const clampChatWidth = useCallback((w: number) => {
+    const vw = window.innerWidth
+    if (vw < 640) return vw // mobile: full-width layout
+    return Math.min(Math.max(w, Math.min(CHAT_MIN_W, vw)), vw)
+  }, [])
+
+  const clampChatHeight = useCallback((h: number | null) => {
+    if (h === null) return null
+    const maxH = Math.max(1, window.innerHeight - HEADER_H) // never past the viewport bottom
+    const minH = Math.min(CHAT_MIN_H, maxH) // min never exceeds max on tiny windows
+    return Math.min(Math.max(h, minH), maxH)
+  }, [])
+
+  // Keep the chat within the viewport on mount and on window resize
+  useEffect(() => {
+    const clamp = () => {
+      setChatWidth(w => clampChatWidth(w))
+      setChatHeight(h => clampChatHeight(h))
+    }
+    clamp()
+    window.addEventListener('resize', clamp)
+    return () => window.removeEventListener('resize', clamp)
+  }, [clampChatWidth, clampChatHeight])
+
+  // Pointer drag on the chat edges/corner (window is anchored top-right, so the
+  // free edges are left → width and bottom → height; corner → both)
+  useEffect(() => {
+    if (!isChatResizing) return
+    const onMove = (e: PointerEvent) => {
+      const s = chatDragRef.current
+      if (!s) return
+      if (s.dir !== 'h') setChatWidth(clampChatWidth(s.w + (s.startX - e.clientX)))
+      if (s.dir !== 'w') setChatHeight(clampChatHeight(s.h + (e.clientY - s.startY)))
+    }
+    const onUp = () => {
+      chatDragRef.current = null
+      setIsChatResizing(false)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [isChatResizing, clampChatWidth, clampChatHeight])
+
+  const startChatResize = useCallback((e: React.PointerEvent, dir: 'w' | 'h' | 'wh') => {
+    if (isChatMaximized) return
+    e.preventDefault()
+    chatDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      w: chatWidth,
+      h: chatHeight ?? window.innerHeight - HEADER_H,
+      dir,
+    }
+    setIsChatResizing(true)
+    document.body.style.cursor = dir === 'w' ? 'ew-resize' : dir === 'h' ? 'ns-resize' : 'nesw-resize'
+    document.body.style.userSelect = 'none'
+  }, [isChatMaximized, chatWidth, chatHeight])
+
+  const toggleChatMaximize = useCallback(() => {
+    if (!isChatMaximized) {
+      // Save the current size so restore brings it back exactly
+      prevChatSizeRef.current = { w: chatWidth, h: chatHeight }
+      setIsChatMaximized(true)
+    } else {
+      setChatWidth(clampChatWidth(prevChatSizeRef.current.w))
+      setChatHeight(clampChatHeight(prevChatSizeRef.current.h))
+      setIsChatMaximized(false)
+    }
+  }, [isChatMaximized, chatWidth, chatHeight, clampChatWidth, clampChatHeight])
+
   // --- Codebase bottom-panel (dockable bottom sheet) state ---
   const MIN_HEIGHT = 160
   const DEFAULT_HEIGHT = 360
@@ -259,10 +351,53 @@ export function Explorer() {
 
       {/* AI chat drawer — overlays the layout so the grid is untouched.
           Stays mounted while minimized (hidden) so conversation state is preserved;
-          X unmounts it (existing close behavior). */}
+          X unmounts it (existing close behavior). Sized by chatWidth/chatHeight
+          (or full-bleed when maximized); edges/corner are drag-to-resize. */}
       {isChatOpen && (
-        <div className={`fixed top-14 right-0 bottom-0 w-[400px] max-w-[92vw] z-40 border-l border-[#23232f] bg-[#0e0e14] shadow-2xl ${isChatMinimized ? 'hidden' : ''}`}>
-          <AskAI repoId={data.id} selectedPath={selectedPath} onMinimize={() => setIsChatMinimized(true)} onClose={() => { setIsChatOpen(false); setIsChatMinimized(false) }} />
+        <div
+          className={`fixed top-14 right-0 z-40 border-l border-[#23232f] bg-[#0e0e14] shadow-2xl overflow-hidden ${
+            isChatMaximized ? 'left-0 bottom-0' : chatHeight === null ? 'bottom-0' : ''
+          } ${isChatResizing ? '' : 'transition-[width,height] duration-150 ease-out'} ${isChatMinimized ? 'hidden' : ''}`}
+          style={isChatMaximized ? undefined : { width: chatWidth, ...(chatHeight !== null ? { height: chatHeight } : {}) }}
+        >
+          {!isChatMaximized && (
+            <>
+              {/* Left edge — drag to resize width (desktop only; mobile is full-width) */}
+              <div
+                onPointerDown={e => startChatResize(e, 'w')}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize chat width"
+                title="Drag to resize width"
+                className="hidden sm:block absolute left-0 top-0 bottom-0 w-1.5 z-10 cursor-ew-resize touch-none select-none hover:bg-[#7c5cff]/40 active:bg-[#7c5cff]/60"
+              />
+              {/* Bottom edge — drag to resize height */}
+              <div
+                onPointerDown={e => startChatResize(e, 'h')}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize chat height"
+                title="Drag to resize height"
+                className="absolute left-0 right-0 bottom-0 h-1.5 z-10 cursor-ns-resize touch-none select-none hover:bg-[#7c5cff]/40 active:bg-[#7c5cff]/60"
+              />
+              {/* Bottom-left corner — drag to resize both */}
+              <div
+                onPointerDown={e => startChatResize(e, 'wh')}
+                role="separator"
+                aria-label="Resize chat window"
+                title="Drag to resize"
+                className="hidden sm:block absolute left-0 bottom-0 w-3.5 h-3.5 z-10 cursor-nesw-resize touch-none select-none hover:bg-[#7c5cff]/40 active:bg-[#7c5cff]/60"
+              />
+            </>
+          )}
+          <AskAI
+            repoId={data.id}
+            selectedPath={selectedPath}
+            isMaximized={isChatMaximized}
+            onToggleMaximize={toggleChatMaximize}
+            onMinimize={() => setIsChatMinimized(true)}
+            onClose={() => { setIsChatOpen(false); setIsChatMinimized(false); setIsChatMaximized(false) }}
+          />
         </div>
       )}
     </div>
